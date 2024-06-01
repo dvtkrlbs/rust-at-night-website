@@ -7,15 +7,14 @@ use axum::{
     extract::DefaultBodyLimit,
     response::{IntoResponse, Response},
     routing::get,
-    Router, serve,
+    serve, Router,
 };
 use camino::Utf8PathBuf;
 use color_eyre::Result;
+use http_body_util::BodyExt;
 use hyper::{Request, StatusCode};
 use std::{net::SocketAddr, sync::Arc};
-use http_body_util::BodyExt;
-use tokio::net::TcpListener;
-use tokio::select;
+use tokio::{net::TcpListener, select};
 use tower::ServiceExt;
 use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing::{info, instrument};
@@ -81,10 +80,10 @@ impl Service {
                             .body(Body::from(index_content).boxed_unsync())
                             .unwrap()
                     }
-                    _ =>  Response::builder()
-                            .status(res.status())
-                            .body(res.map_err(|e| axum::Error::new(e)).boxed_unsync())
-                            .unwrap()
+                    _ => Response::builder()
+                        .status(res.status())
+                        .body(res.map_err(|e| axum::Error::new(e)).boxed_unsync())
+                        .unwrap(),
                 }
             }
             Err(err) => Response::builder()
