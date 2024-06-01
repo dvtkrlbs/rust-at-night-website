@@ -46,3 +46,4 @@ $RECYCLE.BIN/
 *.dmp
 PVS-Studio.**
 ehthumbs.db
+.idea/

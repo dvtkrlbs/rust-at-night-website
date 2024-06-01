@@ -3,16 +3,18 @@ use crate::{
     Options,
 };
 use axum::{
-    body::{boxed, Body},
+    body::Body,
     extract::DefaultBodyLimit,
     response::{IntoResponse, Response},
     routing::get,
-    Router, Server,
+    Router, serve,
 };
 use camino::Utf8PathBuf;
 use color_eyre::Result;
 use hyper::{Request, StatusCode};
 use std::{net::SocketAddr, sync::Arc};
+use http_body_util::BodyExt;
+use tokio::net::TcpListener;
 use tokio::select;
 use tower::ServiceExt;
 use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
@@ -59,7 +61,7 @@ impl Service {
     /// Those will be removed.
     pub async fn serve_frontend(req: Request<Body>, static_dir: Utf8PathBuf) -> impl IntoResponse {
         match ServeDir::new(&static_dir).oneshot(req).await {
-            Ok(res) => {
+            Ok(mut res) => {
                 let status = res.status();
                 match status {
                     StatusCode::NOT_FOUND => {
@@ -68,7 +70,7 @@ impl Service {
                             Err(_) => {
                                 return Response::builder()
                                     .status(StatusCode::NOT_FOUND)
-                                    .body(boxed(Body::from("Internal server error.")))
+                                    .body(Body::from("Internal server error.").boxed_unsync())
                                     .unwrap()
                             }
                             Ok(index_content) => index_content,
@@ -76,15 +78,18 @@ impl Service {
 
                         Response::builder()
                             .status(StatusCode::OK)
-                            .body(boxed(Body::from(index_content)))
+                            .body(Body::from(index_content).boxed_unsync())
                             .unwrap()
                     }
-                    _ => res.map(boxed),
+                    _ =>  Response::builder()
+                            .status(res.status())
+                            .body(res.map_err(|e| axum::Error::new(e)).boxed_unsync())
+                            .unwrap()
                 }
             }
             Err(err) => Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(boxed(Body::from(format!("error: {err}"))))
+                .body(Body::from(format!("error: {err}")).boxed_unsync())
                 .expect("error response"),
         }
     }
@@ -107,7 +112,9 @@ impl Service {
     pub async fn launch_api(&self, addr: SocketAddr) -> Result<()> {
         let app = self.router();
         info!("Launching server on {addr}");
-        Server::bind(&addr).serve(app.into_make_service()).await?;
+        let listener = TcpListener::bind(&addr).await?;
+        serve(listener, app).await?;
+        // Server::bind(&addr).serve(app.into_make_service()).await?;
         Ok(())
     }
 
