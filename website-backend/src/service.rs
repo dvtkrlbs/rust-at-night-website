@@ -60,7 +60,7 @@ impl Service {
     /// Those will be removed.
     pub async fn serve_frontend(req: Request<Body>, static_dir: Utf8PathBuf) -> impl IntoResponse {
         match ServeDir::new(&static_dir).oneshot(req).await {
-            Ok(mut res) => {
+            Ok(res) => {
                 let status = res.status();
                 match status {
                     StatusCode::NOT_FOUND => {
@@ -82,7 +82,7 @@ impl Service {
                     }
                     _ => Response::builder()
                         .status(res.status())
-                        .body(res.map_err(|e| axum::Error::new(e)).boxed_unsync())
+                        .body(res.map_err(axum::Error::new).boxed_unsync())
                         .unwrap(),
                 }
             }
